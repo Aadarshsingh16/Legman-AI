@@ -21,6 +21,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 }) => {
   const { state, dispatch } = useStore();
   const { history, ui } = state;
+  const [theme, setTheme] = React.useState<'dark' | 'light'>('dark');
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    document.documentElement.setAttribute('data-theme', nextTheme);
+  };
 
   const undoAvailable = canUndo(history);
   const redoAvailable = canRedo(history);
@@ -111,6 +118,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             Fit View
           </button>
         )}
+
+        <button
+          type="button"
+          className="btn"
+          onClick={toggleTheme}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          aria-label="Toggle dark/light theme"
+        >
+          {theme === 'dark' ? '🌙 Dark' : '☀️ Light'}
+        </button>
       </div>
 
       <div className="toolbar-group">
