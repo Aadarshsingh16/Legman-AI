@@ -8,9 +8,11 @@ import { instantiateNode } from './core/nodeTemplates';
 import { AddNodeCommand, AddPortCommand, RemovePortCommand } from './core/commands';
 import { newId } from './core/id';
 import { Port } from './core/types';
+import { useDrag } from './hooks/useDrag';
 
 const MainLayout: React.FC = () => {
   const { state, dispatch } = useStore();
+  const { startDrag, onDragMove, endDrag } = useDrag();
 
   const handleAddNodeFromPalette = (type: string) => {
     // Add near center of current viewport
@@ -131,6 +133,9 @@ const MainLayout: React.FC = () => {
         <Palette onAddNode={handleAddNodeFromPalette} />
         <main className="canvas-container">
           <Canvas
+            onNodePointerDown={startDrag}
+            onNodePointerMove={onDragMove}
+            onNodePointerUp={endDrag}
             onAddPort={handleAddPort}
             onRemovePort={handleRemovePort}
             onSelectWire={handleSelectWire}

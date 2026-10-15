@@ -7,6 +7,8 @@ import { PortRef } from '../core/types';
 
 export interface CanvasProps {
   onNodePointerDown?: (e: React.PointerEvent, nodeId: string) => void;
+  onNodePointerMove?: (e: React.PointerEvent) => void;
+  onNodePointerUp?: (e: React.PointerEvent) => void;
   onPortPointerDown?: (e: React.PointerEvent, portRef: PortRef) => void;
   onPortPointerEnter?: (portRef: PortRef) => void;
   onPortPointerLeave?: (portRef: PortRef) => void;
@@ -18,6 +20,8 @@ export interface CanvasProps {
 
 export const Canvas: React.FC<CanvasProps> = ({
   onNodePointerDown,
+  onNodePointerMove,
+  onNodePointerUp,
   onPortPointerDown,
   onPortPointerEnter,
   onPortPointerLeave,
@@ -222,6 +226,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                 validTargetPortIds={validTargetPortIds}
                 activeDraftWire={Boolean(ui.draftWire)}
                 onNodePointerDown={onNodePointerDown}
+                onNodePointerMove={onNodePointerMove}
+                onNodePointerUp={onNodePointerUp}
                 onPortPointerDown={onPortPointerDown}
                 onPortPointerEnter={onPortPointerEnter}
                 onPortPointerLeave={onPortPointerLeave}

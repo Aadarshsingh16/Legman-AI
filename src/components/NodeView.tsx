@@ -12,6 +12,8 @@ export interface NodeViewProps {
   validTargetPortIds?: Set<string>;
   activeDraftWire?: boolean;
   onNodePointerDown?: (e: React.PointerEvent, nodeId: string) => void;
+  onNodePointerMove?: (e: React.PointerEvent) => void;
+  onNodePointerUp?: (e: React.PointerEvent) => void;
   onPortPointerDown?: (e: React.PointerEvent, portRef: PortRef) => void;
   onPortPointerEnter?: (portRef: PortRef) => void;
   onPortPointerLeave?: (portRef: PortRef) => void;
@@ -27,6 +29,8 @@ export const NodeView: React.FC<NodeViewProps> = ({
   validTargetPortIds,
   activeDraftWire = false,
   onNodePointerDown,
+  onNodePointerMove,
+  onNodePointerUp,
   onPortPointerDown,
   onPortPointerEnter,
   onPortPointerLeave,
@@ -65,7 +69,12 @@ export const NodeView: React.FC<NodeViewProps> = ({
       }}
       data-node-id={node.id}
     >
-      <div className="node-header" onPointerDown={handleHeaderPointerDown}>
+      <div
+        className="node-header"
+        onPointerDown={handleHeaderPointerDown}
+        onPointerMove={onNodePointerMove}
+        onPointerUp={onNodePointerUp}
+      >
         <div className={`node-stripe ${category}`} />
         <span className="node-title">{node.label}</span>
       </div>
