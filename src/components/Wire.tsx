@@ -28,7 +28,7 @@ export const Wire: React.FC<WireProps> = React.memo(
     isSelected = false,
     onSelect,
   }) => {
-    // Effective node positions accounting for drag overrides
+    // mid-drag, the live position is in ui.dragPositions, not the graph
     const effectiveSourceNode: WorkflowNode = sourceOverridePos
       ? { ...sourceNode, x: sourceOverridePos.x, y: sourceOverridePos.y }
       : sourceNode;
@@ -63,9 +63,8 @@ export const Wire: React.FC<WireProps> = React.memo(
         onClick={handleClick}
         data-edge-id={edge.id}
       >
-        {/* Invisible 14px hit area for easy selection */}
+        {/* fat invisible path so thin wires are still easy to click */}
         <path d={pathD} className="wire-hit-path" />
-        {/* Crisp visible path */}
         <path
           d={pathD}
           className="wire-visible-path"

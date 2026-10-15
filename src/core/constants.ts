@@ -7,7 +7,7 @@ export const FOOTER_H = 12;
 export const GRID_SIZE = 20;
 
 export const COMPATIBLE: Record<PortType, PortType[]> = {
-  trigger: ['action'], // trigger node output feeds an action input
+  trigger: ['action'],
   action: ['action'],
   data: ['data'],
 };

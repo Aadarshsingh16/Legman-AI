@@ -67,7 +67,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
       setErrors([]);
     };
     reader.readAsText(file);
-    // Reset file input so re-selecting same file triggers change
+    // clear it, otherwise picking the same file again won't fire onChange
     e.target.value = '';
   };
 

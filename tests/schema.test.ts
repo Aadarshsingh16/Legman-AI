@@ -240,7 +240,7 @@ describe('Schema Serialization & Validation (exportGraph & parseGraph)', () => {
     const exported = exportGraph(graph);
     const cyclicEdges = [
       { id: 'e1', source: { nodeId: 'nA', portId: 'A-out' }, target: { nodeId: 'nB', portId: 'B-in' } },
-      { id: 'e2', source: { nodeId: 'nB', portId: 'B-out' }, target: { nodeId: 'nA', portId: 'A-in' } }, // cycle!
+      { id: 'e2', source: { nodeId: 'nB', portId: 'B-out' }, target: { nodeId: 'nA', portId: 'A-in' } }, // closes a cycle
     ];
 
     const res = parseGraph({ ...exported, edges: cyclicEdges });

@@ -6,10 +6,8 @@ export interface Point {
   y: number;
 }
 
-/**
- * Calculates world coordinates of a port on a given node.
- * Guaranteed to be purely mathematical based on state; no DOM measurements used.
- */
+// Port position is pure math from node x/y + port index, no DOM reads.
+// That's what lets wires follow a drag without layout thrashing.
 export function portPosition(node: WorkflowNode, port: Port): Point {
   const isOut = port.direction === 'out';
   const sameDirPorts = node.ports.filter((p) => p.direction === port.direction);
@@ -22,19 +20,15 @@ export function portPosition(node: WorkflowNode, port: Port): Point {
   };
 }
 
-/**
- * Computes cubic bezier curve SVG path string from source output to target input.
- * Handles target positioned left of source smoothly with an S-loop.
- */
+// Control points get a minimum horizontal offset so a target sitting left of
+// the source still gets a readable S-curve instead of a kink.
 export function bezierPath(p1: Point, p2: Point): string {
   const dx = Math.max(50, Math.abs(p2.x - p1.x) * 0.5);
   return `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`;
 }
 
-/**
- * Converts a sequence of points into an SVG path with quadratic rounded corners.
- * Clamps radius to at most half of the adjacent segment lengths.
- */
+// Radius is clamped to half the shorter neighbouring segment, otherwise
+// short segments get corners that overshoot.
 export function roundedPolyline(points: Point[], radius = 8): string {
   if (points.length === 0) return '';
   if (points.length === 1) return `M ${points[0]!.x} ${points[0]!.y}`;
@@ -87,15 +81,12 @@ export function roundedPolyline(points: Point[], radius = 8): string {
   return path;
 }
 
-/**
- * Computes orthogonal SVG path connecting output port p1 (facing right)
- * to input port p2 (facing left).
- */
+// p1 is an output (exits right), p2 an input (enters from the left).
 export function orthogonalPath(p1: Point, p2: Point, stub = 24, radius = 8): string {
   let points: Point[];
 
   if (p2.x - stub >= p1.x + stub) {
-    // Forward branch: target is safely to the right
+    // target is to the right - simple Z shape
     const mx = (p1.x + p2.x) / 2;
     points = [
       p1,
@@ -104,7 +95,7 @@ export function orthogonalPath(p1: Point, p2: Point, stub = 24, radius = 8): str
       p2,
     ];
   } else {
-    // Backward or overlapping branch: route around with stubs
+    // target is behind us, so step out, go around, and come back in
     const my = (p1.y + p2.y) / 2;
     points = [
       p1,

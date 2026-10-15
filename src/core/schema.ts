@@ -6,7 +6,7 @@ export interface SerializedPort {
   name: string;
   direction: 'in' | 'out';
   type: PortType;
-  maxConnections: number | null; // Infinity -> null
+  maxConnections: number | null; // JSON has no Infinity
 }
 
 export interface SerializedNode {
@@ -34,10 +34,7 @@ export interface WorkflowSchema {
   viewport?: { x: number; y: number; zoom: number };
 }
 
-/**
- * Exports runtime Graph to clean, sorted, validated schema v1 object.
- * Nodes and edges are exported as arrays sorted by ID for stable diffs.
- */
+// Sorted by id so exporting the same graph twice gives an identical file.
 export function exportGraph(
   graph: Graph,
   meta?: { name?: string },
@@ -88,10 +85,7 @@ export type ParseResult =
     }
   | { ok: false; errors: string[] };
 
-/**
- * Parses and validates raw input against schema v1 without throwing.
- * Collects ALL errors instead of short-circuiting on the first error.
- */
+// Doesn't throw - collects every problem so the import dialog can list them all.
 export function parseGraph(input: unknown): ParseResult {
   const errors: string[] = [];
 
@@ -101,12 +95,10 @@ export function parseGraph(input: unknown): ParseResult {
 
   const raw = input as Record<string, unknown>;
 
-  // 1. Version check
   if (raw['version'] !== 1) {
     errors.push(`Unsupported or missing schema version: expected version 1, got ${String(raw['version'])}`);
   }
 
-  // 2. Meta check
   const metaObj = raw['meta'];
   const name =
     typeof metaObj === 'object' && metaObj !== null && typeof (metaObj as Record<string, unknown>)['name'] === 'string'
@@ -118,7 +110,7 @@ export function parseGraph(input: unknown): ParseResult {
       ? ((metaObj as Record<string, unknown>)['exportedAt'] as string)
       : new Date().toISOString();
 
-  // 3. Optional Viewport check
+  // viewport is optional
   let parsedViewport: { x: number; y: number; zoom: number } | undefined = undefined;
   if ('viewport' in raw && raw['viewport'] !== undefined) {
     const vp = raw['viewport'];
@@ -141,13 +133,11 @@ export function parseGraph(input: unknown): ParseResult {
     }
   }
 
-  // 4. Nodes array check
   const rawNodes = raw['nodes'];
   if (!Array.isArray(rawNodes)) {
     errors.push('Property "nodes" must be an array');
   }
 
-  // 5. Edges array check
   const rawEdges = raw['edges'];
   if (!Array.isArray(rawEdges)) {
     errors.push('Property "edges" must be an array');
@@ -164,7 +154,6 @@ export function parseGraph(input: unknown): ParseResult {
   const seenNodeIds = new Set<string>();
   const seenPortIds = new Set<string>();
 
-  // Validate nodes and their ports
   for (let i = 0; i < validNodesArray.length; i++) {
     const n = validNodesArray[i];
     if (typeof n !== 'object' || n === null) {
@@ -276,7 +265,7 @@ export function parseGraph(input: unknown): ParseResult {
     };
   }
 
-  // Scratch graph for validating edges step-by-step
+  // build the graph up edge by edge so canConnect() catches limits + cycles
   const scratchGraph: Graph = {
     nodes: parsedNodes,
     edges: {},
@@ -284,7 +273,6 @@ export function parseGraph(input: unknown): ParseResult {
 
   const seenEdgeIds = new Set<string>();
 
-  // Validate edges against scratch graph
   for (let i = 0; i < validEdgesArray.length; i++) {
     const e = validEdgesArray[i];
     if (typeof e !== 'object' || e === null) {
@@ -357,7 +345,6 @@ export function parseGraph(input: unknown): ParseResult {
       continue;
     }
 
-    // Direction check: source must be 'out', target must be 'in'
     if (sourcePort.direction !== 'out') {
       errors.push(`Edge "${edgeId}" source port "${sPortId}" must have direction "out"`);
     }
@@ -365,7 +352,6 @@ export function parseGraph(input: unknown): ParseResult {
       errors.push(`Edge "${edgeId}" target port "${tPortId}" must have direction "in"`);
     }
 
-    // Validation rules (compatibility, duplicate, maxConnections, cycles)
     const check = canConnect(
       scratchGraph,
       { nodeId: sNodeId, portId: sPortId },
@@ -375,7 +361,6 @@ export function parseGraph(input: unknown): ParseResult {
     if (!check.ok) {
       errors.push(`Edge "${edgeId}" fails connection validation: ${check.reason}`);
     } else {
-      // Add valid edge into scratchGraph to validate subsequent edges (cycles, limits)
       const validEdge: Edge = {
         id: edgeId,
         source: { nodeId: sNodeId, portId: sPortId },

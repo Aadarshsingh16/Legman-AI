@@ -36,17 +36,16 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ pointerX: number; pointerY: number; vpX: number; vpY: number } | null>(null);
 
-  // Active draft wire tracking
   const draftWireActiveRef = useRef<boolean>(false);
   draftWireActiveRef.current = Boolean(ui.draftWire);
 
-  // Compute valid target port IDs when drawing a draft wire
+  // ports we could legally drop on, so they can light up while dragging
   const activeValidTargets = useMemo(() => {
     if (!ui.draftWire) return undefined;
     return validTargets(graph, ui.draftWire.from);
   }, [graph, ui.draftWire]);
 
-  // Port pointerdown: initiates wire drawing
+  // pressing on a port starts a new wire
   const handlePortPointerDown = (e: React.PointerEvent, portRef: PortRef) => {
     e.stopPropagation();
     if (!containerRef.current) return;
@@ -58,7 +57,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     try {
       containerRef.current.setPointerCapture(e.pointerId);
     } catch {
-      // fallback
+      // can throw on synthetic events, safe to ignore
     }
 
     dispatch({
@@ -73,7 +72,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     });
   };
 
-  // Canvas pointer down: handles panning and deselection
+  // background press = pan + clear selection
   const handlePointerDown = (e: React.PointerEvent) => {
     const isDirectCanvas =
       e.target === containerRef.current ||
@@ -86,7 +85,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       try {
         containerRef.current.setPointerCapture(e.pointerId);
       } catch {
-        // fallback
+        // can throw on synthetic events, safe to ignore
       }
       setIsPanning(true);
       panStartRef.current = {
@@ -96,7 +95,6 @@ export const Canvas: React.FC<CanvasProps> = ({
         vpY: vp.y,
       };
 
-      // Deselect all on background click
       if (isDirectCanvas && !e.shiftKey) {
         dispatch({
           type: 'SET_UI',
@@ -108,14 +106,13 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
-  // Pointer move: handles pan or draft wire tracking
   const handlePointerMove = (e: React.PointerEvent) => {
     if (ui.draftWire && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const wx = (e.clientX - rect.left - vp.x) / vp.zoom;
       const wy = (e.clientY - rect.top - vp.y) / vp.zoom;
 
-      // Detect if cursor is hovering over a port element
+      // figure out which port (if any) is under the cursor
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const portEl = el?.closest('.port') as HTMLElement | null;
 
@@ -168,13 +165,12 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
-  // Pointer up: completes draft wire or pan
   const handlePointerUp = (e: React.PointerEvent) => {
     if (ui.draftWire) {
       try {
         containerRef.current?.releasePointerCapture(e.pointerId);
       } catch {
-        // ignore
+        // already released
       }
 
       if (ui.draftWire.hover) {
@@ -192,7 +188,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             });
           }
         } else if (ui.draftWire.hover.reason) {
-          // Dropped on invalid port -> display toast
+          // dropped on a port we can't connect to, tell the user why
           dispatch({
             type: 'SET_UI',
             payload: {
@@ -206,7 +202,6 @@ export const Canvas: React.FC<CanvasProps> = ({
         }
       }
 
-      // Clear draft wire
       dispatch({
         type: 'SET_UI',
         payload: { draftWire: null },
@@ -220,12 +215,12 @@ export const Canvas: React.FC<CanvasProps> = ({
       try {
         containerRef.current?.releasePointerCapture(e.pointerId);
       } catch {
-        // ignore
+        // already released
       }
     }
   };
 
-  // Attach non-passive wheel listener for smooth cursor-centered zoom
+  // React's onWheel is passive, so we can't preventDefault there - attach it manually
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -264,7 +259,6 @@ export const Canvas: React.FC<CanvasProps> = ({
   const nodes = Object.values(graph.nodes);
   const edges = Object.values(graph.edges);
 
-  // Compute draft wire source node and port
   let draftWireSourceNode = null;
   let draftWireSourcePort = null;
   if (ui.draftWire) {
@@ -320,7 +314,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           transform: `translate3d(${vp.x}px, ${vp.y}px, 0) scale(${vp.zoom})`,
         }}
       >
-        {/* SVG Wires Layer */}
+        {/* wires */}
         <svg className="wires-svg" style={{ width: 1, height: 1 }}>
           {edges.map((edge) => {
             const sourceNode = graph.nodes[edge.source.nodeId];
@@ -350,7 +344,6 @@ export const Canvas: React.FC<CanvasProps> = ({
             );
           })}
 
-          {/* Draft Wire in progress */}
           {ui.draftWire && draftWireSourceNode && draftWireSourcePort && (
             <DraftWire
               fromNode={draftWireSourceNode}
@@ -362,7 +355,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           )}
         </svg>
 
-        {/* Nodes Layer */}
+        {/* nodes */}
         <div className="nodes-layer">
           {nodes.map((node) => {
             const isSelected = ui.selection.nodeIds.includes(node.id);
@@ -389,7 +382,6 @@ export const Canvas: React.FC<CanvasProps> = ({
         </div>
       </div>
 
-      {/* Empty State Hint */}
       {nodes.length === 0 && (
         <div className="canvas-empty-hint">
           <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)' }}>Workflow is empty</p>
@@ -399,7 +391,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         </div>
       )}
 
-      {/* Screen coordinate hover tooltip for invalid connection reason */}
+      {/* explains why the hovered port is off-limits */}
       {ui.draftWire?.hover && !ui.draftWire.hover.ok && ui.draftWire.hover.reason && (
         <div
           className="cursor-tooltip"

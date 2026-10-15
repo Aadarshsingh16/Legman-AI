@@ -8,7 +8,7 @@ export function useShortcuts() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore shortcuts if typing in an input, textarea, or contentEditable element
+      // don't hijack Backspace / Ctrl+Z while the user is typing
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -22,14 +22,14 @@ export function useShortcuts() {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
-      // Undo: Ctrl+Z / Cmd+Z (without Shift)
+      // undo
       if (cmdOrCtrl && !e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         dispatch({ type: 'UNDO' });
         return;
       }
 
-      // Redo: Ctrl+Y or Ctrl+Shift+Z / Cmd+Shift+Z
+      // redo - Ctrl+Y, or Ctrl+Shift+Z for mac habits
       if (
         (cmdOrCtrl && e.key.toLowerCase() === 'y') ||
         (cmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'z')
@@ -39,7 +39,6 @@ export function useShortcuts() {
         return;
       }
 
-      // Escape: cancel draft wire or clear selection
       if (e.key === 'Escape') {
         e.preventDefault();
         dispatch({
@@ -52,7 +51,7 @@ export function useShortcuts() {
         return;
       }
 
-      // Delete / Backspace: remove selected nodes and edges in ONE atomic command
+      // delete everything selected as a single undo step
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const hasSelectedNodes = ui.selection.nodeIds.length > 0;
         const hasSelectedEdges = ui.selection.edgeIds.length > 0;
@@ -61,7 +60,7 @@ export function useShortcuts() {
           e.preventDefault();
 
           if (hasSelectedNodes && hasSelectedEdges) {
-            // Find edges not connected to any selected node
+            // edges on deleted nodes go away with the node anyway
             const independentEdgeIds = ui.selection.edgeIds.filter((edgeId) => {
               const edge = history.present.edges[edgeId];
               if (!edge) return false;

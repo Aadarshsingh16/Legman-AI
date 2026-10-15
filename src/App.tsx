@@ -23,7 +23,7 @@ const MainLayout: React.FC = () => {
   const [isImportOpen, setIsImportOpen] = useState(false);
 
   const handleAddNodeFromPalette = (type: string) => {
-    // Add near center of current viewport
+    // drop new nodes roughly in the middle of what is on screen
     const vp = state.ui.viewport;
     const worldX = Math.round((-vp.x + 300) / vp.zoom);
     const worldY = Math.round((-vp.y + 200) / vp.zoom);

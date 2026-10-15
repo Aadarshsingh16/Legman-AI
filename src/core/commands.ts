@@ -302,7 +302,7 @@ export class RemovePortCommand implements Command {
     const node = g.nodes[this.nodeId];
     if (!node || !this.removedPort || this.index < 0) return g;
 
-    // Restore port at the exact index
+    // same index as before so the node layout doesn't shift
     const ports = [...node.ports];
     ports.splice(this.index, 0, this.removedPort);
 
@@ -397,7 +397,6 @@ export class BatchCommand implements Command {
   }
 
   undo(g: Graph): Graph {
-    // Reverse order for undo
     return this.commands.reduceRight((acc, cmd) => cmd.undo(acc), g);
   }
 }

@@ -6,17 +6,13 @@ export type ValidationResult =
   | { ok: true; source: PortRef; target: PortRef }
   | { ok: false; reason: string };
 
-/**
- * Checks if a directed edge can be formed between two ports (in either order).
- * If valid, returns { ok: true, source, target } with normalized direction (source is 'out', target is 'in').
- * If invalid, returns { ok: false, reason } with the first failure encountered.
- */
+// Ports can come in either order. On success we hand back the edge direction
+// (out -> in); on failure, a reason string that gets shown in the UI.
 export function canConnect(
   graph: Graph,
   a: PortRef,
   b: PortRef
 ): ValidationResult {
-  // 1. Both ports exist
   const portA = getPort(graph, a);
   const portB = getPort(graph, b);
 
@@ -24,12 +20,11 @@ export function canConnect(
     return { ok: false, reason: 'Port does not exist' };
   }
 
-  // 2. One 'out' and one 'in'
   if (portA.direction === portB.direction) {
     return { ok: false, reason: 'Connect an output to an input' };
   }
 
-  // Normalize so source is 'out' and target is 'in'
+  // user can drag either way, so normalise to out -> in
   let sourceRef: PortRef;
   let targetRef: PortRef;
   let sourcePort: Port;
@@ -47,12 +42,10 @@ export function canConnect(
     targetPort = portA;
   }
 
-  // 3. Different nodes
   if (sourceRef.nodeId === targetRef.nodeId) {
     return { ok: false, reason: "Can't connect a node to itself" };
   }
 
-  // 4. Type compatibility via COMPATIBLE
   const allowedTargets = COMPATIBLE[sourcePort.type as PortType] ?? [];
   if (!allowedTargets.includes(targetPort.type)) {
     return {
@@ -61,7 +54,6 @@ export function canConnect(
     };
   }
 
-  // 5. No duplicate edge (same source + target)
   const isDuplicate = Object.values(graph.edges).some(
     (e) =>
       e.source.nodeId === sourceRef.nodeId &&
@@ -73,7 +65,6 @@ export function canConnect(
     return { ok: false, reason: 'Connection already exists' };
   }
 
-  // 6. Target maxConnections not exceeded
   const currentTargetConnections = Object.values(graph.edges).filter(
     (e) =>
       e.target.nodeId === targetRef.nodeId &&
@@ -84,7 +75,6 @@ export function canConnect(
     return { ok: false, reason: 'Input already connected' };
   }
 
-  // 7. No cycle: DFS from target node to see if source node is reachable
   if (wouldCreateCycle(graph, sourceRef.nodeId, targetRef.nodeId)) {
     return { ok: false, reason: 'Would create a cycle' };
   }
@@ -96,10 +86,7 @@ export function canConnect(
   };
 }
 
-/**
- * Checks if adding an edge from sourceNodeId to targetNodeId would introduce a cycle.
- * Traverses forward starting from targetNodeId; if sourceNodeId is reachable, adding the edge would form a cycle.
- */
+// If we can already walk from target to source, adding source -> target closes a loop.
 export function wouldCreateCycle(
   graph: Graph,
   sourceNodeId: string,
@@ -120,7 +107,6 @@ export function wouldCreateCycle(
 
     if (!visited.has(current)) {
       visited.add(current);
-      // Follow all outgoing edges from current node
       for (const edge of Object.values(graph.edges)) {
         if (edge.source.nodeId === current && !visited.has(edge.target.nodeId)) {
           stack.push(edge.target.nodeId);
@@ -132,9 +118,6 @@ export function wouldCreateCycle(
   return false;
 }
 
-/**
- * Finds all valid target port IDs that can connect with fromPortRef in the current graph.
- */
 export function validTargets(graph: Graph, fromPortRef: PortRef): Set<string> {
   const result = new Set<string>();
   const fromPort = getPort(graph, fromPortRef);

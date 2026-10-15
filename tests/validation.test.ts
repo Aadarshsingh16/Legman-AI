@@ -288,7 +288,7 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
       graph.edges['e2'] = { id: 'e2', source: { nodeId: 'nA', portId: 'pA-out2' }, target: { nodeId: 'nC', portId: 'pC-in' } };
       graph.edges['e3'] = { id: 'e3', source: { nodeId: 'nB', portId: 'pB-out' }, target: { nodeId: 'nD', portId: 'pD-in1' } };
 
-      // Now connect C -> D (closing the diamond) - should be valid!
+      // closing the diamond is fine, it's not a cycle
       const res = canConnect(
         graph,
         { nodeId: 'nC', portId: 'pC-out' },
@@ -304,7 +304,6 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
       const fromRef = { nodeId: 'nodeA', portId: 'pA-out' };
       const targets = validTargets(graph, fromRef);
 
-      // Check every port across all nodes
       for (const node of Object.values(graph.nodes)) {
         for (const port of node.ports) {
           const check = canConnect(graph, fromRef, { nodeId: node.id, portId: port.id });

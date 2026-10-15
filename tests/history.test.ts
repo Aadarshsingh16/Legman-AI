@@ -69,7 +69,7 @@ describe('History State Engine', () => {
     expect(getRedoLabel(h2)).toBe('Add node');
     expect(h2.future).toHaveLength(1);
 
-    // Executing a new command while future has entries MUST clear future
+    // new command after an undo should wipe the redo stack
     const cmd2 = new AddNodeCommand(createNode('n2'));
     const h3 = execute(h2, cmd2);
 
@@ -88,7 +88,7 @@ describe('History State Engine', () => {
     }
 
     expect(h.past.length).toBe(MAX_HISTORY_LIMIT);
-    // Oldest should have dropped; the latest should be node-249
+    // oldest entries fall off, newest is node-249
     expect(h.present.nodes['node-249']).toBeDefined();
   });
 
@@ -96,7 +96,6 @@ describe('History State Engine', () => {
     const initialGraph = createEmptyGraph();
     let h = createHistory(initialGraph);
 
-    // Execute 20 varied commands
     for (let i = 0; i < 10; i++) {
       h = execute(h, new AddNodeCommand(createNode(`n${i}`, i * 10, i * 10)));
     }
@@ -115,7 +114,6 @@ describe('History State Engine', () => {
     const finalGraph = h.present;
     expect(h.past.length).toBe(20);
 
-    // Undo all 20
     for (let i = 0; i < 20; i++) {
       expect(canUndo(h)).toBe(true);
       h = undo(h);
@@ -124,7 +122,6 @@ describe('History State Engine', () => {
     expect(canUndo(h)).toBe(false);
     expect(h.present).toEqual(initialGraph);
 
-    // Redo all 20
     for (let i = 0; i < 20; i++) {
       expect(canRedo(h)).toBe(true);
       h = redo(h);
@@ -152,10 +149,9 @@ describe('History State Engine', () => {
       expect(h.past.length).toBe(2);
       expect(h.future.length).toBe(1);
 
-      // Now execute new command
       h = execute(h, new AddNodeCommand(createNode('n4')));
       expect(h.past.length).toBe(3);
-      expect(h.future.length).toBe(0); // future cleared!
+      expect(h.future.length).toBe(0); // redo stack gone
 
       expect(h.present.nodes['n1']).toBeDefined();
       expect(h.present.nodes['n2']).toBeDefined();

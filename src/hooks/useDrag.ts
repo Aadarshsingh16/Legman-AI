@@ -17,7 +17,7 @@ export function useDrag() {
 
   const startDrag = useCallback(
     (e: React.PointerEvent, clickedNodeId: string) => {
-      // Only primary mouse button or touch
+      // left button / touch only
       if (e.button !== 0) return;
 
       const graph = state.history.present;
@@ -29,7 +29,6 @@ export function useDrag() {
       let nextSelection = currentSelection;
 
       if (isShift) {
-        // Toggle selection
         nextSelection = currentSelection.includes(clickedNodeId)
           ? currentSelection.filter((id) => id !== clickedNodeId)
           : [...currentSelection, clickedNodeId];
@@ -44,7 +43,6 @@ export function useDrag() {
           },
         });
       } else if (!currentSelection.includes(clickedNodeId)) {
-        // Single selection
         nextSelection = [clickedNodeId];
         dispatch({
           type: 'SET_UI',
@@ -57,8 +55,8 @@ export function useDrag() {
         });
       }
 
-      // Moving nodes are all selected nodes that include the clicked node,
-      // or at least the clicked node
+      // dragging a selected node drags the whole selection,
+      // otherwise just this one
       const movingNodeIds = nextSelection.includes(clickedNodeId)
         ? nextSelection
         : [clickedNodeId];
@@ -71,12 +69,11 @@ export function useDrag() {
         }
       }
 
-      // Capture pointer on target element
       const targetEl = e.currentTarget as HTMLElement;
       try {
         targetEl.setPointerCapture(e.pointerId);
       } catch {
-        // pointer capture fallback
+        // can throw on synthetic events, safe to ignore
       }
 
       sessionRef.current = {
@@ -139,7 +136,7 @@ export function useDrag() {
       try {
         targetEl.releasePointerCapture(e.pointerId);
       } catch {
-        // ignore
+        // already released
       }
 
       if (session.hasMoved) {
@@ -172,13 +169,12 @@ export function useDrag() {
           }
         }
 
-        // Clear transient dragPositions overlay
         dispatch({
           type: 'SET_UI',
           payload: { dragPositions: {} },
         });
 
-        // Commit exactly one MoveNodesCommand if position actually changed
+        // one history entry per drag, not one per mousemove
         if (moves.length > 0) {
           dispatch({
             type: 'EXECUTE',
@@ -186,7 +182,6 @@ export function useDrag() {
           });
         }
       } else {
-        // Simple click without movement - just clear dragPositions
         dispatch({
           type: 'SET_UI',
           payload: { dragPositions: {} },

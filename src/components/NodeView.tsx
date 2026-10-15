@@ -48,7 +48,7 @@ export const NodeView: React.FC<NodeViewProps> = ({
   const outPorts = node.ports.filter((p) => p.direction === 'out');
   const rowCount = Math.max(inPorts.length, outPorts.length);
 
-  // Compute default port IDs from template to detect user-added ports
+  // template ports can't be removed, only ones the user added
   const defaultPortCount = template?.defaultPorts.length ?? 0;
 
   const handleHeaderPointerDown = (e: React.PointerEvent) => {
@@ -91,7 +91,6 @@ export const NodeView: React.FC<NodeViewProps> = ({
           const inPort = inPorts[rowIndex];
           const outPort = outPorts[rowIndex];
 
-          // Check if outPort is user-added beyond template defaults
           const isUserAdded = outPort ? node.ports.indexOf(outPort) >= defaultPortCount : false;
 
           return (

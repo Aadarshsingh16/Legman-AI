@@ -14,7 +14,7 @@ import {
 import { Graph, WorkflowNode, Edge, Port } from '../src/core/types';
 import { createEmptyGraph } from '../src/core/graph';
 
-// Helper to deeply freeze an object and assert immutability
+// deep freeze so any accidental mutation throws
 function deepFreeze<T>(obj: T): T {
   if (obj === null || typeof obj !== 'object') return obj;
   Object.freeze(obj);
@@ -70,7 +70,7 @@ describe('Commands Core', () => {
       edges: { e12, e23 },
     });
 
-    // Remove middle node n2 (should remove both e12 and e23)
+    // removing n2 should take e12 and e23 with it
     const cmd = new RemoveNodesCommand(['n2']);
     const doneGraph = cmd.do(graph);
 
@@ -80,7 +80,7 @@ describe('Commands Core', () => {
     expect(doneGraph.edges['e12']).toBeUndefined();
     expect(doneGraph.edges['e23']).toBeUndefined();
 
-    // Undo should restore n2 AND both e12 and e23
+    // ...and undo brings all three back
     const undoneGraph = cmd.undo(doneGraph);
     expect(undoneGraph).toEqual(graph);
   });
@@ -144,7 +144,6 @@ describe('Commands Core', () => {
     expect(withEdge.edges['e1']).toEqual(edge);
     expect(addCmd.undo(withEdge)).toEqual(graph);
 
-    // Now test RemoveEdgesCommand
     deepFreeze(withEdge);
     const removeCmd = new RemoveEdgesCommand(['e1']);
     const withoutEdge = removeCmd.do(withEdge);
@@ -204,7 +203,7 @@ describe('Commands Core', () => {
     expect(done.nodes['n1']?.ports.map((p) => p.id)).toEqual(['pA', 'pC']);
     expect(done.edges['e1']).toBeUndefined();
 
-    // Undo must restore pB at index 1 and restore edge e1
+    // pB should come back at index 1, along with e1
     const undone = cmd.undo(done);
     expect(undone.nodes['n1']?.ports).toHaveLength(3);
     expect(undone.nodes['n1']?.ports[1]?.id).toBe('pB');

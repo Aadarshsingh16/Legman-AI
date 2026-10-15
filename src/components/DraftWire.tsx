@@ -23,8 +23,8 @@ export const DraftWire: React.FC<DraftWireProps> = ({
   const isOut = fromPort.direction === 'out';
   const fixedPos = portPosition(fromNode, fromPort);
 
-  // If dragging from out port, cursor is the target (p2)
-  // If dragging from in port, swap so cursor is source (p1) to maintain left-to-right flow
+  // keep the curve flowing left -> right: if the wire started on an input,
+  // treat the cursor as the source end
   const p1 = isOut ? fixedPos : cursor;
   const p2 = isOut ? cursor : fixedPos;
 

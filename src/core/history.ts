@@ -17,24 +17,17 @@ export function createHistory(initialGraph: Graph): HistoryState {
   };
 }
 
-/**
- * Executes a command, applying it to present, appending to past (capped at 200),
- * and clearing future.
- */
+// past is capped at 200 so long sessions don't grow memory forever
 export function execute(h: HistoryState, cmd: Command): HistoryState {
   const nextPresent = cmd.do(h.present);
   const nextPast = [...h.past.slice(-(MAX_HISTORY_LIMIT - 1)), cmd];
   return {
     present: nextPresent,
     past: nextPast,
-    future: [], // New action always clears future
+    future: [], // a new edit kills the redo branch
   };
 }
 
-/**
- * Undoes the most recent command if past is not empty.
- * Pop command from past, call cmd.undo(present), push to future.
- */
 export function undo(h: HistoryState): HistoryState {
   if (h.past.length === 0) {
     return h;
@@ -51,10 +44,6 @@ export function undo(h: HistoryState): HistoryState {
   };
 }
 
-/**
- * Redoes the next command if future is not empty.
- * Pop command from future, call cmd.do(present), push to past.
- */
 export function redo(h: HistoryState): HistoryState {
   if (h.future.length === 0) {
     return h;

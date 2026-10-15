@@ -11,7 +11,7 @@ export interface Port {
   name: string;
   direction: Direction;
   type: PortType;
-  maxConnections: number; // inputs default 1, outputs Infinity (serialize as null)
+  maxConnections: number; // inputs default to 1, outputs unlimited
 }
 
 export interface WorkflowNode {
@@ -19,8 +19,8 @@ export interface WorkflowNode {
   type: string; // template key e.g. 'webhook'
   label: string;
   x: number;
-  y: number; // top-left, world coords
-  ports: Port[]; // order = render order
+  y: number; // top-left corner, world coords
+  ports: Port[];
 }
 
 export interface Edge {
