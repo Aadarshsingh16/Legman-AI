@@ -4,6 +4,7 @@ import { canRedo, canUndo, getRedoLabel, getUndoLabel } from '../core/history';
 
 export interface ToolbarProps {
   onExport?: () => void;
+  onCopyJson?: () => void;
   onImport?: () => void;
   onLoadExample?: () => void;
   onClear?: () => void;
@@ -12,6 +13,7 @@ export interface ToolbarProps {
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   onExport,
+  onCopyJson,
   onImport,
   onLoadExample,
   onClear,
@@ -141,10 +143,22 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             type="button"
             className="btn"
             onClick={onExport}
-            title="Export workflow JSON"
+            title="Download workflow as JSON file"
             aria-label="Export JSON"
           >
-            Export
+            Export JSON
+          </button>
+        )}
+
+        {onCopyJson && (
+          <button
+            type="button"
+            className="btn"
+            onClick={onCopyJson}
+            title="Copy workflow JSON to clipboard"
+            aria-label="Copy JSON"
+          >
+            Copy JSON
           </button>
         )}
 

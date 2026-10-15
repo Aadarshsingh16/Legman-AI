@@ -1,21 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StoreProvider, useStore } from './state/store';
 import { Toolbar } from './components/Toolbar';
 import { Palette } from './components/Palette';
 import { Canvas } from './components/Canvas';
 import { sampleInitialGraph } from './samples/sampleGraph';
 import { instantiateNode } from './core/nodeTemplates';
-import { AddNodeCommand, AddPortCommand, RemovePortCommand } from './core/commands';
-import { newId } from './core/id';
-import { Port } from './core/types';
+import { AddNodeCommand, AddPortCommand, RemovePortCommand, ReplaceGraphCommand } from './core/commands';
+import { newId, syncIdCounterWithGraph } from './core/id';
+import { Graph, Port } from './core/types';
 import { useDrag } from './hooks/useDrag';
 import { useShortcuts } from './hooks/useShortcuts';
 import { Toast } from './components/Toast';
+import { ImportDialog } from './components/ImportDialog';
+import { exportGraph } from './core/schema';
+import exampleWorkflowJson from './samples/example.json';
 
 const MainLayout: React.FC = () => {
   const { state, dispatch } = useStore();
   const { startDrag, onDragMove, endDrag } = useDrag();
   useShortcuts();
+
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const handleAddNodeFromPalette = (type: string) => {
     // Add near center of current viewport
@@ -85,16 +90,48 @@ const MainLayout: React.FC = () => {
   };
 
   const handleLoadExample = () => {
+    const exampleGraph: Graph = {
+      nodes: {},
+      edges: {},
+    };
+    for (const n of exampleWorkflowJson.nodes) {
+      exampleGraph.nodes[n.id] = {
+        id: n.id,
+        type: n.type,
+        label: n.label,
+        x: n.position.x,
+        y: n.position.y,
+        ports: n.ports.map((p) => ({
+          id: p.id,
+          name: p.name,
+          direction: p.direction as 'in' | 'out',
+          type: p.type as import('./core/types').PortType,
+          maxConnections: p.maxConnections ?? (p.direction === 'in' ? 1 : Infinity),
+        })),
+      };
+    }
+    for (const e of exampleWorkflowJson.edges) {
+      exampleGraph.edges[e.id] = e;
+    }
+
+    syncIdCounterWithGraph(exampleGraph);
     dispatch({
-      type: 'RESET_GRAPH',
-      graph: sampleInitialGraph,
+      type: 'EXECUTE',
+      command: new ReplaceGraphCommand(state.history.present, exampleGraph, 'Load example template'),
     });
+    if (exampleWorkflowJson.viewport) {
+      dispatch({
+        type: 'SET_UI',
+        payload: { viewport: exampleWorkflowJson.viewport },
+      });
+    }
   };
 
   const handleClear = () => {
+    const emptyGraph: Graph = { nodes: {}, edges: {} };
     dispatch({
-      type: 'RESET_GRAPH',
-      graph: { nodes: {}, edges: {} },
+      type: 'EXECUTE',
+      command: new ReplaceGraphCommand(state.history.present, emptyGraph, 'Clear canvas'),
     });
   };
 
@@ -138,9 +175,75 @@ const MainLayout: React.FC = () => {
     });
   };
 
+  const handleExport = () => {
+    const exported = exportGraph(state.history.present, { name: 'Workflow Export' }, state.ui.viewport);
+    const jsonStr = JSON.stringify(exported, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `workflow-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    dispatch({
+      type: 'SET_UI',
+      payload: {
+        toast: { id: `toast-${Date.now()}`, kind: 'info', text: 'Downloaded workflow JSON!' },
+      },
+    });
+  };
+
+  const handleCopyJson = () => {
+    const exported = exportGraph(state.history.present, { name: 'Workflow Export' }, state.ui.viewport);
+    const jsonStr = JSON.stringify(exported, null, 2);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(jsonStr).then(() => {
+        dispatch({
+          type: 'SET_UI',
+          payload: {
+            toast: { id: `toast-${Date.now()}`, kind: 'info', text: 'Copied JSON to clipboard!' },
+          },
+        });
+      });
+    }
+  };
+
+  const handleImportSuccess = (
+    importedGraph: Graph,
+    meta?: { name: string },
+    importedViewport?: { x: number; y: number; zoom: number }
+  ) => {
+    syncIdCounterWithGraph(importedGraph);
+    const label = `Import ${meta?.name ?? 'workflow'}`;
+    dispatch({
+      type: 'EXECUTE',
+      command: new ReplaceGraphCommand(state.history.present, importedGraph, label),
+    });
+
+    if (importedViewport) {
+      dispatch({
+        type: 'SET_UI',
+        payload: { viewport: importedViewport },
+      });
+    } else {
+      setTimeout(handleFitToView, 50);
+    }
+
+    dispatch({
+      type: 'SET_UI',
+      payload: {
+        toast: { id: `toast-${Date.now()}`, kind: 'info', text: `Successfully imported ${meta?.name ?? 'workflow'}!` },
+      },
+    });
+  };
+
   return (
     <div className="app-shell">
       <Toolbar
+        onExport={handleExport}
+        onCopyJson={handleCopyJson}
+        onImport={() => setIsImportOpen(true)}
         onLoadExample={handleLoadExample}
         onClear={handleClear}
         onFitToView={handleFitToView}
@@ -160,6 +263,11 @@ const MainLayout: React.FC = () => {
         </main>
       </div>
       <Toast />
+      <ImportDialog
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImportSuccess={handleImportSuccess}
+      />
     </div>
   );
 };

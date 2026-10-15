@@ -1,14 +1,102 @@
 {
   "version": 1,
   "meta": {
-    "name": "Example Workflow",
-    "exportedAt": "2026-10-15T00:00:00.000Z"
+    "name": "Production Order Notification Workflow",
+    "exportedAt": "2026-10-15T12:00:00.000Z"
   },
-  "nodes": [],
-  "edges": [],
+  "nodes": [
+    {
+      "id": "node-webhook",
+      "type": "webhook",
+      "label": "Webhook Trigger",
+      "position": { "x": 80, "y": 140 },
+      "ports": [
+        { "id": "wh-out", "name": "Trigger", "direction": "out", "type": "trigger", "maxConnections": null }
+      ]
+    },
+    {
+      "id": "node-http",
+      "type": "http",
+      "label": "Fetch User Data",
+      "position": { "x": 360, "y": 140 },
+      "ports": [
+        { "id": "http-in", "name": "In", "direction": "in", "type": "action", "maxConnections": 1 },
+        { "id": "http-out", "name": "Out", "direction": "out", "type": "action", "maxConnections": null }
+      ]
+    },
+    {
+      "id": "node-condition",
+      "type": "condition",
+      "label": "Check Status",
+      "position": { "x": 640, "y": 120 },
+      "ports": [
+        { "id": "cond-in", "name": "In", "direction": "in", "type": "action", "maxConnections": 1 },
+        { "id": "cond-true", "name": "True", "direction": "out", "type": "action", "maxConnections": null },
+        { "id": "cond-false", "name": "False", "direction": "out", "type": "action", "maxConnections": null },
+        { "id": "cond-pending", "name": "Pending", "direction": "out", "type": "action", "maxConnections": null }
+      ]
+    },
+    {
+      "id": "node-email",
+      "type": "email",
+      "label": "Send Email",
+      "position": { "x": 920, "y": 60 },
+      "ports": [
+        { "id": "email-in", "name": "In", "direction": "in", "type": "action", "maxConnections": 1 },
+        { "id": "email-out", "name": "Out", "direction": "out", "type": "action", "maxConnections": null }
+      ]
+    },
+    {
+      "id": "node-transform",
+      "type": "transform",
+      "label": "Transform Logs",
+      "position": { "x": 920, "y": 240 },
+      "ports": [
+        { "id": "tf-in", "name": "In", "direction": "in", "type": "action", "maxConnections": 1 },
+        { "id": "tf-din", "name": "Data In", "direction": "in", "type": "data", "maxConnections": 1 },
+        { "id": "tf-dout", "name": "Data Out", "direction": "out", "type": "data", "maxConnections": null }
+      ]
+    },
+    {
+      "id": "node-end",
+      "type": "end",
+      "label": "End Flow",
+      "position": { "x": 1200, "y": 140 },
+      "ports": [
+        { "id": "end-in", "name": "In", "direction": "in", "type": "action", "maxConnections": 1 }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "source": { "nodeId": "node-webhook", "portId": "wh-out" },
+      "target": { "nodeId": "node-http", "portId": "http-in" }
+    },
+    {
+      "id": "edge-2",
+      "source": { "nodeId": "node-http", "portId": "http-out" },
+      "target": { "nodeId": "node-condition", "portId": "cond-in" }
+    },
+    {
+      "id": "edge-3",
+      "source": { "nodeId": "node-condition", "portId": "cond-true" },
+      "target": { "nodeId": "node-email", "portId": "email-in" }
+    },
+    {
+      "id": "edge-4",
+      "source": { "nodeId": "node-condition", "portId": "cond-false" },
+      "target": { "nodeId": "node-transform", "portId": "tf-in" }
+    },
+    {
+      "id": "edge-5",
+      "source": { "nodeId": "node-email", "portId": "email-out" },
+      "target": { "nodeId": "node-end", "portId": "end-in" }
+    }
+  ],
   "viewport": {
-    "x": 0,
-    "y": 0,
-    "zoom": 1
+    "x": 40,
+    "y": 60,
+    "zoom": 0.95
   }
 }
