@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production build output
+dist/
+build/
+coverage/
+
+# Environment files and credentials (NEVER commit)
+.env
+.env.*
+*.env
+*.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+.env*.local
+
+# Instructions and prompt markdown files (NEVER commit)
+files (3)/
+files*/
+01-CONTEXT.md
+02-ARCHITECTURE.md
+03-DESIGN.md
+04-PHASES.md
+05-PLAN.md
+06-REVIEW.md
+SKILL.md
+AGENTS.md
+*.zip
+workflow-builder-docs.zip
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# Editor and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

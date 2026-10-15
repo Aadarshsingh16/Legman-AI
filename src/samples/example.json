@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "meta": {
+    "name": "Example Workflow",
+    "exportedAt": "2026-10-15T00:00:00.000Z"
+  },
+  "nodes": [],
+  "edges": [],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  }
+}
