@@ -24,6 +24,19 @@ const MainLayout: React.FC = () => {
     const worldY = Math.round((-vp.y + 200) / vp.zoom);
     const node = instantiateNode(type, worldX, worldY);
     dispatch({ type: 'EXECUTE', command: new AddNodeCommand(node) });
+    dispatch({
+      type: 'SET_UI',
+      payload: { selection: { nodeIds: [node.id], edgeIds: [] } },
+    });
+  };
+
+  const handleDropNode = (type: string, worldPos: { x: number; y: number }) => {
+    const node = instantiateNode(type, worldPos.x, worldPos.y);
+    dispatch({ type: 'EXECUTE', command: new AddNodeCommand(node) });
+    dispatch({
+      type: 'SET_UI',
+      payload: { selection: { nodeIds: [node.id], edgeIds: [] } },
+    });
   };
 
   const handleAddPort = (nodeId: string) => {
@@ -142,6 +155,7 @@ const MainLayout: React.FC = () => {
             onAddPort={handleAddPort}
             onRemovePort={handleRemovePort}
             onSelectWire={handleSelectWire}
+            onDropNode={handleDropNode}
           />
         </main>
       </div>

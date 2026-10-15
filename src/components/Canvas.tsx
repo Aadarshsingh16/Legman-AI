@@ -15,6 +15,7 @@ export interface CanvasProps {
   onAddPort?: (nodeId: string) => void;
   onRemovePort?: (nodeId: string, portId: string) => void;
   onSelectWire?: (e: React.MouseEvent, edgeId: string) => void;
+  onDropNode?: (templateType: string, worldPos: { x: number; y: number }) => void;
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
@@ -24,6 +25,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onAddPort,
   onRemovePort,
   onSelectWire,
+  onDropNode,
 }) => {
   const { state, dispatch } = useStore();
   const { history, ui } = state;
@@ -271,6 +273,31 @@ export const Canvas: React.FC<CanvasProps> = ({
       draftWireSourceNode?.ports.find((p) => p.id === ui.draftWire?.from.portId) ?? null;
   }
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const templateType = e.dataTransfer.getData('text/plain');
+    if (!templateType || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    let dropX = (e.clientX - rect.left - vp.x) / vp.zoom;
+    let dropY = (e.clientY - rect.top - vp.y) / vp.zoom;
+
+    if (ui.snap) {
+      dropX = Math.round(dropX / 20) * 20;
+      dropY = Math.round(dropY / 20) * 20;
+    } else {
+      dropX = Math.round(dropX);
+      dropY = Math.round(dropY);
+    }
+
+    onDropNode?.(templateType, { x: dropX, y: dropY });
+  };
+
   return (
     <div
       ref={containerRef}
@@ -284,6 +311,8 @@ export const Canvas: React.FC<CanvasProps> = ({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
     >
       <div
         className="world"

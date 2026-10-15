@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from '../state/store';
-import { RemoveEdgesCommand, RemoveNodesCommand } from '../core/commands';
+import { BatchCommand, RemoveEdgesCommand, RemoveNodesCommand } from '../core/commands';
 
 export function useShortcuts() {
   const { state, dispatch } = useStore();
@@ -52,7 +52,7 @@ export function useShortcuts() {
         return;
       }
 
-      // Delete / Backspace: remove selected nodes and edges
+      // Delete / Backspace: remove selected nodes and edges in ONE atomic command
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const hasSelectedNodes = ui.selection.nodeIds.length > 0;
         const hasSelectedEdges = ui.selection.edgeIds.length > 0;
@@ -60,15 +60,37 @@ export function useShortcuts() {
         if (hasSelectedNodes || hasSelectedEdges) {
           e.preventDefault();
 
-          if (hasSelectedNodes) {
+          if (hasSelectedNodes && hasSelectedEdges) {
+            // Find edges not connected to any selected node
+            const independentEdgeIds = ui.selection.edgeIds.filter((edgeId) => {
+              const edge = history.present.edges[edgeId];
+              if (!edge) return false;
+              return (
+                !ui.selection.nodeIds.includes(edge.source.nodeId) &&
+                !ui.selection.nodeIds.includes(edge.target.nodeId)
+              );
+            });
+
+            const commands: import('../core/commands').Command[] = [
+              new RemoveNodesCommand(ui.selection.nodeIds),
+            ];
+            if (independentEdgeIds.length > 0) {
+              commands.push(new RemoveEdgesCommand(independentEdgeIds));
+            }
+
+            dispatch({
+              type: 'EXECUTE',
+              command:
+                commands.length > 1
+                  ? new BatchCommand('Delete selection', commands)
+                  : commands[0]!,
+            });
+          } else if (hasSelectedNodes) {
             dispatch({
               type: 'EXECUTE',
               command: new RemoveNodesCommand(ui.selection.nodeIds),
             });
-          }
-
-          if (hasSelectedEdges) {
-            // Filter edges that might have already been removed if their attached nodes were removed
+          } else if (hasSelectedEdges) {
             dispatch({
               type: 'EXECUTE',
               command: new RemoveEdgesCommand(ui.selection.edgeIds),

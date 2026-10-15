@@ -60,6 +60,7 @@ export const PortView: React.FC<PortViewProps> = ({
         <button
           type="button"
           className="remove-port-btn"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={handleRemove}
           title="Remove port"
           aria-label={`Remove port ${port.name}`}

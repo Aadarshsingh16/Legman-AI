@@ -68,13 +68,20 @@ export const NodeView: React.FC<NodeViewProps> = ({
         transform: `translate3d(${posX}px, ${posY}px, 0)`,
       }}
       data-node-id={node.id}
+      onPointerDown={(e) => {
+        const target = e.target as HTMLElement;
+        if (
+          !target.closest('.port') &&
+          !target.closest('.add-port-btn') &&
+          !target.closest('.remove-port-btn')
+        ) {
+          handleHeaderPointerDown(e);
+        }
+      }}
+      onPointerMove={onNodePointerMove}
+      onPointerUp={onNodePointerUp}
     >
-      <div
-        className="node-header"
-        onPointerDown={handleHeaderPointerDown}
-        onPointerMove={onNodePointerMove}
-        onPointerUp={onNodePointerUp}
-      >
+      <div className="node-header">
         <div className={`node-stripe ${category}`} />
         <span className="node-title">{node.label}</span>
       </div>
@@ -122,6 +129,7 @@ export const NodeView: React.FC<NodeViewProps> = ({
           <button
             type="button"
             className="add-port-btn"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={handleAddPortClick}
           >
             + Add output
