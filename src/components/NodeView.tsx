@@ -1,26 +1,123 @@
 import React from 'react';
-import { WorkflowNode } from '../core/types';
+import { PortRef, WorkflowNode } from '../core/types';
+import { NODE_TEMPLATES } from '../core/nodeTemplates';
+import { NODE_W, ROW_H } from '../core/constants';
 import { PortView } from './PortView';
 
 export interface NodeViewProps {
   node: WorkflowNode;
+  position?: { x: number; y: number };
+  isSelected?: boolean;
+  isDragging?: boolean;
+  validTargetPortIds?: Set<string>;
+  activeDraftWire?: boolean;
+  onNodePointerDown?: (e: React.PointerEvent, nodeId: string) => void;
+  onPortPointerDown?: (e: React.PointerEvent, portRef: PortRef) => void;
+  onPortPointerEnter?: (portRef: PortRef) => void;
+  onPortPointerLeave?: (portRef: PortRef) => void;
+  onAddPort?: (nodeId: string) => void;
+  onRemovePort?: (nodeId: string, portId: string) => void;
 }
 
-export const NodeView: React.FC<NodeViewProps> = ({ node }) => {
+export const NodeView: React.FC<NodeViewProps> = ({
+  node,
+  position,
+  isSelected = false,
+  isDragging = false,
+  validTargetPortIds,
+  activeDraftWire = false,
+  onNodePointerDown,
+  onPortPointerDown,
+  onPortPointerEnter,
+  onPortPointerLeave,
+  onAddPort,
+  onRemovePort,
+}) => {
+  const template = NODE_TEMPLATES[node.type];
+  const category = template?.category ?? 'action';
+  const allowAddOutput = template?.allowAddOutput ?? false;
+
+  const posX = position ? position.x : node.x;
+  const posY = position ? position.y : node.y;
+
+  const inPorts = node.ports.filter((p) => p.direction === 'in');
+  const outPorts = node.ports.filter((p) => p.direction === 'out');
+  const rowCount = Math.max(inPorts.length, outPorts.length);
+
+  // Compute default port IDs from template to detect user-added ports
+  const defaultPortCount = template?.defaultPorts.length ?? 0;
+
+  const handleHeaderPointerDown = (e: React.PointerEvent) => {
+    onNodePointerDown?.(e, node.id);
+  };
+
+  const handleAddPortClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAddPort?.(node.id);
+  };
+
   return (
     <div
-      className="workflow-node"
+      className={`workflow-node ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
       style={{
-        position: 'absolute',
-        left: node.x,
-        top: node.y,
+        width: `${NODE_W}px`,
+        transform: `translate3d(${posX}px, ${posY}px, 0)`,
       }}
+      data-node-id={node.id}
     >
-      <div className="node-header">{node.label}</div>
-      <div className="node-ports">
-        {node.ports.map((p) => (
-          <PortView key={p.id} node={node} port={p} />
-        ))}
+      <div className="node-header" onPointerDown={handleHeaderPointerDown}>
+        <div className={`node-stripe ${category}`} />
+        <span className="node-title">{node.label}</span>
+      </div>
+
+      <div className="node-body">
+        {Array.from({ length: rowCount }).map((_, rowIndex) => {
+          const inPort = inPorts[rowIndex];
+          const outPort = outPorts[rowIndex];
+
+          // Check if outPort is user-added beyond template defaults
+          const isUserAdded = outPort ? node.ports.indexOf(outPort) >= defaultPortCount : false;
+
+          return (
+            <div key={`row-${rowIndex}`} className="node-row" style={{ height: `${ROW_H}px` }}>
+              {inPort && (
+                <PortView
+                  node={node}
+                  port={inPort}
+                  isTarget={Boolean(validTargetPortIds?.has(inPort.id))}
+                  isDimmed={Boolean(activeDraftWire && !validTargetPortIds?.has(inPort.id))}
+                  onPortPointerDown={onPortPointerDown}
+                  onPortPointerEnter={onPortPointerEnter}
+                  onPortPointerLeave={onPortPointerLeave}
+                  onRemovePort={onRemovePort}
+                />
+              )}
+              {outPort && (
+                <PortView
+                  node={node}
+                  port={outPort}
+                  isTarget={Boolean(validTargetPortIds?.has(outPort.id))}
+                  isDimmed={Boolean(activeDraftWire && !validTargetPortIds?.has(outPort.id))}
+                  isUserAdded={isUserAdded}
+                  onPortPointerDown={onPortPointerDown}
+                  onPortPointerEnter={onPortPointerEnter}
+                  onPortPointerLeave={onPortPointerLeave}
+                  onRemovePort={onRemovePort}
+                />
+              )}
+            </div>
+          );
+        })}
+
+        {allowAddOutput && (
+          <button
+            type="button"
+            className="add-port-btn"
+            onClick={handleAddPortClick}
+          >
+            + Add output
+          </button>
+        )}
       </div>
     </div>
   );

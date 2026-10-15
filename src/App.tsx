@@ -1,24 +1,151 @@
 import React from 'react';
+import { StoreProvider, useStore } from './state/store';
+import { Toolbar } from './components/Toolbar';
+import { Palette } from './components/Palette';
+import { Canvas } from './components/Canvas';
+import { sampleInitialGraph } from './samples/sampleGraph';
+import { instantiateNode } from './core/nodeTemplates';
+import { AddNodeCommand, AddPortCommand, RemovePortCommand } from './core/commands';
+import { newId } from './core/id';
+import { Port } from './core/types';
 
-export const App: React.FC = () => {
+const MainLayout: React.FC = () => {
+  const { state, dispatch } = useStore();
+
+  const handleAddNodeFromPalette = (type: string) => {
+    // Add near center of current viewport
+    const vp = state.ui.viewport;
+    const worldX = Math.round((-vp.x + 300) / vp.zoom);
+    const worldY = Math.round((-vp.y + 200) / vp.zoom);
+    const node = instantiateNode(type, worldX, worldY);
+    dispatch({ type: 'EXECUTE', command: new AddNodeCommand(node) });
+  };
+
+  const handleAddPort = (nodeId: string) => {
+    const node = state.history.present.nodes[nodeId];
+    if (!node) return;
+    const portId = newId(`${nodeId}-port`);
+    const newPort: Port = {
+      id: portId,
+      name: `Branch ${node.ports.filter((p) => p.direction === 'out').length + 1}`,
+      direction: 'out',
+      type: 'action',
+      maxConnections: Infinity,
+    };
+    dispatch({ type: 'EXECUTE', command: new AddPortCommand(nodeId, newPort) });
+  };
+
+  const handleRemovePort = (nodeId: string, portId: string) => {
+    dispatch({ type: 'EXECUTE', command: new RemovePortCommand(nodeId, portId) });
+  };
+
+  const handleSelectWire = (e: React.MouseEvent, edgeId: string) => {
+    if (e.shiftKey) {
+      const exists = state.ui.selection.edgeIds.includes(edgeId);
+      dispatch({
+        type: 'SET_UI',
+        payload: {
+          selection: {
+            ...state.ui.selection,
+            edgeIds: exists
+              ? state.ui.selection.edgeIds.filter((id) => id !== edgeId)
+              : [...state.ui.selection.edgeIds, edgeId],
+          },
+        },
+      });
+    } else {
+      dispatch({
+        type: 'SET_UI',
+        payload: {
+          selection: {
+            nodeIds: [],
+            edgeIds: [edgeId],
+          },
+        },
+      });
+    }
+  };
+
+  const handleLoadExample = () => {
+    dispatch({
+      type: 'RESET_GRAPH',
+      graph: sampleInitialGraph,
+    });
+  };
+
+  const handleClear = () => {
+    dispatch({
+      type: 'RESET_GRAPH',
+      graph: { nodes: {}, edges: {} },
+    });
+  };
+
+  const handleFitToView = () => {
+    const nodes = Object.values(state.history.present.nodes);
+    if (nodes.length === 0) {
+      dispatch({ type: 'SET_UI', payload: { viewport: { x: 0, y: 0, zoom: 1 } } });
+      return;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const n of nodes) {
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + 200);
+      maxY = Math.max(maxY, n.y + 160);
+    }
+
+    const padding = 80;
+    const canvasEl = document.querySelector('.canvas');
+    const width = canvasEl?.clientWidth ?? 1000;
+    const height = canvasEl?.clientHeight ?? 700;
+
+    const graphWidth = maxX - minX + padding * 2;
+    const graphHeight = maxY - minY + padding * 2;
+
+    const zoom = Math.min(1.5, Math.max(0.4, Math.min(width / graphWidth, height / graphHeight)));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const vpX = Math.round(width / 2 - centerX * zoom);
+    const vpY = Math.round(height / 2 - centerY * zoom);
+
+    dispatch({
+      type: 'SET_UI',
+      payload: { viewport: { x: vpX, y: vpY, zoom } },
+    });
+  };
+
   return (
-    <div className="app-shell" style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
-      <header style={{ height: '48px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 16px', background: 'var(--panel)' }}>
-        <h1 style={{ fontSize: '15px', fontWeight: 600 }}>Workflow Builder</h1>
-      </header>
-      <div style={{ display: 'flex', flex: 1, position: 'relative' }}>
-        <aside style={{ width: '220px', borderRight: '1px solid var(--border)', background: 'var(--panel)', padding: '12px' }}>
-          <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: '0.05em' }}>
-            Palette
-          </div>
-        </aside>
-        <main style={{ flex: 1, position: 'relative', background: 'var(--bg)' }}>
-          <div style={{ padding: '24px', color: 'var(--muted)' }}>
-            Canvas Shell
-          </div>
+    <div className="app-shell">
+      <Toolbar
+        onLoadExample={handleLoadExample}
+        onClear={handleClear}
+        onFitToView={handleFitToView}
+      />
+      <div className="workspace">
+        <Palette onAddNode={handleAddNodeFromPalette} />
+        <main className="canvas-container">
+          <Canvas
+            onAddPort={handleAddPort}
+            onRemovePort={handleRemovePort}
+            onSelectWire={handleSelectWire}
+          />
         </main>
       </div>
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <StoreProvider initialGraph={sampleInitialGraph}>
+      <MainLayout />
+    </StoreProvider>
   );
 };
 
