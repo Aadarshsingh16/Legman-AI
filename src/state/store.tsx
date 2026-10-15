@@ -46,21 +46,39 @@ function appReducer(state: AppState, action: Action): AppState {
       };
     }
     case 'UNDO': {
+      if (state.history.past.length === 0) return state;
+      const undoneCmd = state.history.past[state.history.past.length - 1];
       const nextHistory = undo(state.history);
       const nextUI = pruneSelection(state.ui, nextHistory.present);
       return {
         ...state,
         history: nextHistory,
-        ui: nextUI,
+        ui: {
+          ...nextUI,
+          toast: {
+            id: `toast-${Date.now()}`,
+            kind: 'info',
+            text: `Undid: ${undoneCmd?.label ?? 'Action'}`,
+          },
+        },
       };
     }
     case 'REDO': {
+      if (state.history.future.length === 0) return state;
+      const redoneCmd = state.history.future[0];
       const nextHistory = redo(state.history);
       const nextUI = pruneSelection(state.ui, nextHistory.present);
       return {
         ...state,
         history: nextHistory,
-        ui: nextUI,
+        ui: {
+          ...nextUI,
+          toast: {
+            id: `toast-${Date.now()}`,
+            kind: 'info',
+            text: `Redid: ${redoneCmd?.label ?? 'Action'}`,
+          },
+        },
       };
     }
     case 'SET_UI': {
