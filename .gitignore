@@ -51,3 +51,9 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# AI agent config (local only)
+GEMINI.md
+.agents/
+CLAUDE.md
+.claude/
