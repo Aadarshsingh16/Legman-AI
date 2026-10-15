@@ -9,10 +9,13 @@ import { AddNodeCommand, AddPortCommand, RemovePortCommand } from './core/comman
 import { newId } from './core/id';
 import { Port } from './core/types';
 import { useDrag } from './hooks/useDrag';
+import { useShortcuts } from './hooks/useShortcuts';
+import { Toast } from './components/Toast';
 
 const MainLayout: React.FC = () => {
   const { state, dispatch } = useStore();
   const { startDrag, onDragMove, endDrag } = useDrag();
+  useShortcuts();
 
   const handleAddNodeFromPalette = (type: string) => {
     // Add near center of current viewport
@@ -142,6 +145,7 @@ const MainLayout: React.FC = () => {
           />
         </main>
       </div>
+      <Toast />
     </div>
   );
 };

@@ -1,34 +1,29 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useStore } from '../state/store';
 import { Wire } from './Wire';
 import { NodeView } from './NodeView';
 import { DraftWire } from './DraftWire';
-import { PortRef } from '../core/types';
+import { Edge, PortRef } from '../core/types';
+import { canConnect, validTargets } from '../core/validation';
+import { AddEdgeCommand } from '../core/commands';
+import { newId } from '../core/id';
 
 export interface CanvasProps {
   onNodePointerDown?: (e: React.PointerEvent, nodeId: string) => void;
   onNodePointerMove?: (e: React.PointerEvent) => void;
   onNodePointerUp?: (e: React.PointerEvent) => void;
-  onPortPointerDown?: (e: React.PointerEvent, portRef: PortRef) => void;
-  onPortPointerEnter?: (portRef: PortRef) => void;
-  onPortPointerLeave?: (portRef: PortRef) => void;
   onAddPort?: (nodeId: string) => void;
   onRemovePort?: (nodeId: string, portId: string) => void;
   onSelectWire?: (e: React.MouseEvent, edgeId: string) => void;
-  validTargetPortIds?: Set<string>;
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
   onNodePointerDown,
   onNodePointerMove,
   onNodePointerUp,
-  onPortPointerDown,
-  onPortPointerEnter,
-  onPortPointerLeave,
   onAddPort,
   onRemovePort,
   onSelectWire,
-  validTargetPortIds,
 }) => {
   const { state, dispatch } = useStore();
   const { history, ui } = state;
@@ -39,9 +34,45 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ pointerX: number; pointerY: number; vpX: number; vpY: number } | null>(null);
 
-  // Pan interactions
+  // Active draft wire tracking
+  const draftWireActiveRef = useRef<boolean>(false);
+  draftWireActiveRef.current = Boolean(ui.draftWire);
+
+  // Compute valid target port IDs when drawing a draft wire
+  const activeValidTargets = useMemo(() => {
+    if (!ui.draftWire) return undefined;
+    return validTargets(graph, ui.draftWire.from);
+  }, [graph, ui.draftWire]);
+
+  // Port pointerdown: initiates wire drawing
+  const handlePortPointerDown = (e: React.PointerEvent, portRef: PortRef) => {
+    e.stopPropagation();
+    if (!containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const wx = (e.clientX - rect.left - vp.x) / vp.zoom;
+    const wy = (e.clientY - rect.top - vp.y) / vp.zoom;
+
+    try {
+      containerRef.current.setPointerCapture(e.pointerId);
+    } catch {
+      // fallback
+    }
+
+    dispatch({
+      type: 'SET_UI',
+      payload: {
+        draftWire: {
+          from: portRef,
+          cursor: { x: wx, y: wy },
+          hover: undefined,
+        },
+      },
+    });
+  };
+
+  // Canvas pointer down: handles panning and deselection
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Only pan if clicking canvas background directly or middle click
     const isDirectCanvas =
       e.target === containerRef.current ||
       (e.target as HTMLElement).classList.contains('canvas') ||
@@ -50,7 +81,11 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     if (isDirectCanvas || e.button === 1) {
       if (!containerRef.current) return;
-      containerRef.current.setPointerCapture(e.pointerId);
+      try {
+        containerRef.current.setPointerCapture(e.pointerId);
+      } catch {
+        // fallback
+      }
       setIsPanning(true);
       panStartRef.current = {
         pointerX: e.clientX,
@@ -71,7 +106,50 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
+  // Pointer move: handles pan or draft wire tracking
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (ui.draftWire && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const wx = (e.clientX - rect.left - vp.x) / vp.zoom;
+      const wy = (e.clientY - rect.top - vp.y) / vp.zoom;
+
+      // Detect if cursor is hovering over a port element
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const portEl = el?.closest('.port') as HTMLElement | null;
+
+      let hoverInfo = undefined;
+      if (portEl) {
+        const targetPortId = portEl.getAttribute('data-port-id');
+        const targetNodeId = portEl.getAttribute('data-node-id');
+
+        if (
+          targetPortId &&
+          targetNodeId &&
+          !(targetPortId === ui.draftWire.from.portId && targetNodeId === ui.draftWire.from.nodeId)
+        ) {
+          const candidateRef: PortRef = { nodeId: targetNodeId, portId: targetPortId };
+          const check = canConnect(graph, ui.draftWire.from, candidateRef);
+          hoverInfo = {
+            port: candidateRef,
+            ok: check.ok,
+            reason: check.ok ? undefined : check.reason,
+          };
+        }
+      }
+
+      dispatch({
+        type: 'SET_UI',
+        payload: {
+          draftWire: {
+            ...ui.draftWire,
+            cursor: { x: wx, y: wy },
+            hover: hoverInfo,
+          },
+        },
+      });
+      return;
+    }
+
     if (isPanning && panStartRef.current) {
       const dx = e.clientX - panStartRef.current.pointerX;
       const dy = e.clientY - panStartRef.current.pointerY;
@@ -88,19 +166,64 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
+  // Pointer up: completes draft wire or pan
   const handlePointerUp = (e: React.PointerEvent) => {
+    if (ui.draftWire) {
+      try {
+        containerRef.current?.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+
+      if (ui.draftWire.hover) {
+        if (ui.draftWire.hover.ok) {
+          const check = canConnect(graph, ui.draftWire.from, ui.draftWire.hover.port);
+          if (check.ok) {
+            const newEdge: Edge = {
+              id: newId('edge'),
+              source: check.source,
+              target: check.target,
+            };
+            dispatch({
+              type: 'EXECUTE',
+              command: new AddEdgeCommand(newEdge),
+            });
+          }
+        } else if (ui.draftWire.hover.reason) {
+          // Dropped on invalid port -> display toast
+          dispatch({
+            type: 'SET_UI',
+            payload: {
+              toast: {
+                id: newId('toast'),
+                kind: 'error',
+                text: ui.draftWire.hover.reason,
+              },
+            },
+          });
+        }
+      }
+
+      // Clear draft wire
+      dispatch({
+        type: 'SET_UI',
+        payload: { draftWire: null },
+      });
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       panStartRef.current = null;
       try {
         containerRef.current?.releasePointerCapture(e.pointerId);
       } catch {
-        // ignore if already lost
+        // ignore
       }
     }
   };
 
-  // Attach non-passive wheel listener to allow e.preventDefault()
+  // Attach non-passive wheel listener for smooth cursor-centered zoom
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -139,7 +262,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const nodes = Object.values(graph.nodes);
   const edges = Object.values(graph.edges);
 
-  // Compute draft wire source node and port if drawing
+  // Compute draft wire source node and port
   let draftWireSourceNode = null;
   let draftWireSourcePort = null;
   if (ui.draftWire) {
@@ -223,14 +346,12 @@ export const Canvas: React.FC<CanvasProps> = ({
                 position={ui.dragPositions[node.id]}
                 isSelected={isSelected}
                 isDragging={isDragging}
-                validTargetPortIds={validTargetPortIds}
+                validTargetPortIds={activeValidTargets}
                 activeDraftWire={Boolean(ui.draftWire)}
                 onNodePointerDown={onNodePointerDown}
                 onNodePointerMove={onNodePointerMove}
                 onNodePointerUp={onNodePointerUp}
-                onPortPointerDown={onPortPointerDown}
-                onPortPointerEnter={onPortPointerEnter}
-                onPortPointerLeave={onPortPointerLeave}
+                onPortPointerDown={handlePortPointerDown}
                 onAddPort={onAddPort}
                 onRemovePort={onRemovePort}
               />
