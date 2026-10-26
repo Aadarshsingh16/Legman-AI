@@ -42,7 +42,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({
 
     const res = parseGraph(parsedJson);
     if (!res.ok) {
-      setErrors(res.errors);
+      setErrors(res.errors.map((e) => e.message));
       return;
     }
 

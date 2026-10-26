@@ -88,7 +88,7 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     expect(res.ok).toBe(true);
   });
 
-  it('rejects data -> action connection', () => {
+  it('rejects data -> action connection with TYPE_MISMATCH', () => {
     const res = canConnect(
       graph,
       { nodeId: 'nodeD', portId: 'pD-out' },
@@ -96,11 +96,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) {
+      expect(res.code).toBe('TYPE_MISMATCH');
       expect(res.reason).toBe("'data' output can't connect to 'action' input");
     }
   });
 
-  it('rejects trigger -> trigger connection', () => {
+  it('rejects trigger -> trigger connection with TYPE_MISMATCH', () => {
     graph.nodes['nodeA2'] = makeNode('nodeA2', [
       { id: 'pA2-in', name: 'Trigger In', direction: 'in', type: 'trigger', maxConnections: 1 },
     ]);
@@ -111,11 +112,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) {
+      expect(res.code).toBe('TYPE_MISMATCH');
       expect(res.reason).toBe("'trigger' output can't connect to 'trigger' input");
     }
   });
 
-  it('rejects out -> out connection', () => {
+  it('rejects out -> out connection with DIRECTION_MISMATCH', () => {
     const res = canConnect(
       graph,
       { nodeId: 'nodeA', portId: 'pA-out' },
@@ -123,11 +125,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) {
+      expect(res.code).toBe('DIRECTION_MISMATCH');
       expect(res.reason).toBe('Connect an output to an input');
     }
   });
 
-  it('rejects in -> in connection', () => {
+  it('rejects in -> in connection with DIRECTION_MISMATCH', () => {
     const res = canConnect(
       graph,
       { nodeId: 'nodeB', portId: 'pB-in' },
@@ -135,11 +138,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) {
+      expect(res.code).toBe('DIRECTION_MISMATCH');
       expect(res.reason).toBe('Connect an output to an input');
     }
   });
 
-  it('rejects self-loops (connecting ports on the same node)', () => {
+  it('rejects self-loops (connecting ports on the same node) with SELF_LOOP', () => {
     const res = canConnect(
       graph,
       { nodeId: 'nodeB', portId: 'pB-out' },
@@ -147,11 +151,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) {
+      expect(res.code).toBe('SELF_LOOP');
       expect(res.reason).toBe("Can't connect a node to itself");
     }
   });
 
-  it('rejects duplicate edges between the same source and target', () => {
+  it('rejects duplicate edges between the same source and target with DUPLICATE_EDGE', () => {
     const edge: Edge = {
       id: 'e1',
       source: { nodeId: 'nodeA', portId: 'pA-out' },
@@ -166,11 +171,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) {
+      expect(res.code).toBe('DUPLICATE_EDGE');
       expect(res.reason).toBe('Connection already exists');
     }
   });
 
-  it('rejects second edge into a single-input port (maxConnections exceeded)', () => {
+  it('rejects second edge into a single-input port with CAPACITY_EXCEEDED', () => {
     // Connect nodeB -> nodeC
     graph.edges['e1'] = {
       id: 'e1',
@@ -190,6 +196,7 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     );
     expect(res.ok).toBe(false);
     if (!res.ok) {
+      expect(res.code).toBe('CAPACITY_EXCEEDED');
       expect(res.reason).toBe('Input already connected');
     }
   });
@@ -207,8 +214,80 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
     }
   });
 
+  describe('Check order preservation (when multiple rules would fail)', () => {
+    it('returns PORT_NOT_FOUND first if a port does not exist even if direction would mismatch', () => {
+      const res = canConnect(
+        graph,
+        { nodeId: 'nodeA', portId: 'missing-port' },
+        { nodeId: 'nodeB', portId: 'pB-out' } // would also be DIRECTION_MISMATCH
+      );
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe('PORT_NOT_FOUND');
+      }
+    });
+
+    it('returns DIRECTION_MISMATCH before SELF_LOOP when ports have same direction on same node', () => {
+      // nodeB has pB-in and another in port
+      graph.nodes['nodeB']!.ports.push({
+        id: 'pB-in2',
+        name: 'In 2',
+        direction: 'in',
+        type: 'action',
+        maxConnections: 1,
+      });
+      const res = canConnect(
+        graph,
+        { nodeId: 'nodeB', portId: 'pB-in' },
+        { nodeId: 'nodeB', portId: 'pB-in2' }
+      );
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe('DIRECTION_MISMATCH');
+      }
+    });
+
+    it('returns SELF_LOOP before TYPE_MISMATCH when same node has incompatible port types', () => {
+      // Add data-out port to nodeB (which has action-in)
+      graph.nodes['nodeB']!.ports.push({
+        id: 'pB-data-out',
+        name: 'Data Out',
+        direction: 'out',
+        type: 'data',
+        maxConnections: Infinity,
+      });
+      const res = canConnect(
+        graph,
+        { nodeId: 'nodeB', portId: 'pB-data-out' },
+        { nodeId: 'nodeB', portId: 'pB-in' } // data-out -> action-in on same node
+      );
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe('SELF_LOOP');
+      }
+    });
+
+    it('returns DUPLICATE_EDGE before CAPACITY_EXCEEDED when re-connecting an already connected edge', () => {
+      graph.edges['e1'] = {
+        id: 'e1',
+        source: { nodeId: 'nodeA', portId: 'pA-out' },
+        target: { nodeId: 'nodeB', portId: 'pB-in' },
+      };
+      // Connecting same source and target again
+      const res = canConnect(
+        graph,
+        { nodeId: 'nodeA', portId: 'pA-out' },
+        { nodeId: 'nodeB', portId: 'pB-in' }
+      );
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.code).toBe('DUPLICATE_EDGE');
+      }
+    });
+  });
+
   describe('Cycle detection', () => {
-    it('detects direct 2-node cycle (A -> B, then trying B -> A)', () => {
+    it('detects direct 2-node cycle (A -> B, then trying B -> A) with CYCLE', () => {
       // Connect B -> C
       graph.edges['e1'] = {
         id: 'e1',
@@ -233,11 +312,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
       );
       expect(res.ok).toBe(false);
       if (!res.ok) {
+        expect(res.code).toBe('CYCLE');
         expect(res.reason).toBe('Would create a cycle');
       }
     });
 
-    it('detects long chain cycle (A -> B -> C -> D -> A)', () => {
+    it('detects long chain cycle (A -> B -> C -> D -> A) with CYCLE', () => {
       // A(action) -> B(action) -> C(action) -> D(action)
       graph.nodes['nodeA'] = makeNode('nodeA', [
         { id: 'pA-in', name: 'In', direction: 'in', type: 'action', maxConnections: 1 },
@@ -260,6 +340,7 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
       );
       expect(res.ok).toBe(false);
       if (!res.ok) {
+        expect(res.code).toBe('CYCLE');
         expect(res.reason).toBe('Would create a cycle');
       }
     });
@@ -318,7 +399,7 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
   });
 
   describe('Break-it edge cases', () => {
-    it('returns error when referencing a non-existent/deleted node', () => {
+    it('returns error when referencing a non-existent/deleted node with PORT_NOT_FOUND', () => {
       const res = canConnect(
         graph,
         { nodeId: 'deletedNode', portId: 'p1' },
@@ -326,11 +407,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
       );
       expect(res.ok).toBe(false);
       if (!res.ok) {
+        expect(res.code).toBe('PORT_NOT_FOUND');
         expect(res.reason).toBe('Port does not exist');
       }
     });
 
-    it('rejects connection on same node even if directions match in and out', () => {
+    it('rejects connection on same node even if directions match in and out with SELF_LOOP', () => {
       const res = canConnect(
         graph,
         { nodeId: 'nodeB', portId: 'pB-in' },
@@ -338,11 +420,12 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
       );
       expect(res.ok).toBe(false);
       if (!res.ok) {
+        expect(res.code).toBe('SELF_LOOP');
         expect(res.reason).toBe("Can't connect a node to itself");
       }
     });
 
-    it('rejects two edges from different nodes to the same single input', () => {
+    it('rejects two edges from different nodes to the same single input with CAPACITY_EXCEEDED', () => {
       // Connect nodeA -> nodeB (trigger -> action)
       graph.edges['e1'] = {
         id: 'e1',
@@ -362,6 +445,7 @@ describe('Validation Core (canConnect, cycle detection, validTargets)', () => {
       );
       expect(res.ok).toBe(false);
       if (!res.ok) {
+        expect(res.code).toBe('CAPACITY_EXCEEDED');
         expect(res.reason).toBe('Input already connected');
       }
     });

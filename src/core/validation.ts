@@ -1,10 +1,11 @@
 import { COMPATIBLE } from './constants';
+import { ErrorCode } from './errors';
 import { getPort } from './graph';
 import { Graph, Port, PortRef, PortType } from './types';
 
 export type ValidationResult =
   | { ok: true; source: PortRef; target: PortRef }
-  | { ok: false; reason: string };
+  | { ok: false; code: ErrorCode; reason: string };
 
 // Ports can come in either order. On success we hand back the edge direction
 // (out -> in); on failure, a reason string that gets shown in the UI.
@@ -17,11 +18,11 @@ export function canConnect(
   const portB = getPort(graph, b);
 
   if (!portA || !portB) {
-    return { ok: false, reason: 'Port does not exist' };
+    return { ok: false, code: 'PORT_NOT_FOUND', reason: 'Port does not exist' };
   }
 
   if (portA.direction === portB.direction) {
-    return { ok: false, reason: 'Connect an output to an input' };
+    return { ok: false, code: 'DIRECTION_MISMATCH', reason: 'Connect an output to an input' };
   }
 
   // user can drag either way, so normalise to out -> in
@@ -43,13 +44,14 @@ export function canConnect(
   }
 
   if (sourceRef.nodeId === targetRef.nodeId) {
-    return { ok: false, reason: "Can't connect a node to itself" };
+    return { ok: false, code: 'SELF_LOOP', reason: "Can't connect a node to itself" };
   }
 
   const allowedTargets = COMPATIBLE[sourcePort.type as PortType] ?? [];
   if (!allowedTargets.includes(targetPort.type)) {
     return {
       ok: false,
+      code: 'TYPE_MISMATCH',
       reason: `'${sourcePort.type}' output can't connect to '${targetPort.type}' input`,
     };
   }
@@ -62,7 +64,7 @@ export function canConnect(
       e.target.portId === targetRef.portId
   );
   if (isDuplicate) {
-    return { ok: false, reason: 'Connection already exists' };
+    return { ok: false, code: 'DUPLICATE_EDGE', reason: 'Connection already exists' };
   }
 
   const currentTargetConnections = Object.values(graph.edges).filter(
@@ -72,11 +74,11 @@ export function canConnect(
   ).length;
 
   if (currentTargetConnections >= targetPort.maxConnections) {
-    return { ok: false, reason: 'Input already connected' };
+    return { ok: false, code: 'CAPACITY_EXCEEDED', reason: 'Input already connected' };
   }
 
   if (wouldCreateCycle(graph, sourceRef.nodeId, targetRef.nodeId)) {
-    return { ok: false, reason: 'Would create a cycle' };
+    return { ok: false, code: 'CYCLE', reason: 'Would create a cycle' };
   }
 
   return {

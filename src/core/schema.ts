@@ -1,3 +1,4 @@
+import { AppError, makeError } from './errors';
 import { Edge, Graph, Port, PortType, WorkflowNode } from './types';
 import { canConnect } from './validation';
 
@@ -83,20 +84,26 @@ export type ParseResult =
       viewport?: { x: number; y: number; zoom: number };
       meta: { name: string; exportedAt: string };
     }
-  | { ok: false; errors: string[] };
+  | { ok: false; errors: AppError[] };
 
 // Doesn't throw - collects every problem so the import dialog can list them all.
 export function parseGraph(input: unknown): ParseResult {
-  const errors: string[] = [];
+  const errors: AppError[] = [];
 
   if (typeof input !== 'object' || input === null) {
-    return { ok: false, errors: ['Input must be a valid JSON object'] };
+    return { ok: false, errors: [makeError('INVALID_JSON', 'Input must be a valid JSON object')] };
   }
 
   const raw = input as Record<string, unknown>;
 
   if (raw['version'] !== 1) {
-    errors.push(`Unsupported or missing schema version: expected version 1, got ${String(raw['version'])}`);
+    errors.push(
+      makeError(
+        'UNSUPPORTED_VERSION',
+        `Unsupported or missing schema version: expected version 1, got ${String(raw['version'])}`,
+        { path: 'version', context: { version: raw['version'] } }
+      )
+    );
   }
 
   const metaObj = raw['meta'];
@@ -126,21 +133,25 @@ export function parseGraph(input: unknown): ParseResult {
       ) {
         parsedViewport = { x, y, zoom };
       } else {
-        errors.push('Viewport must have finite x, y, and positive zoom numbers');
+        errors.push(
+          makeError('NON_FINITE', 'Viewport must have finite x, y, and positive zoom numbers', {
+            path: 'viewport',
+          })
+        );
       }
     } else {
-      errors.push('Viewport must be an object');
+      errors.push(makeError('INVALID_SHAPE', 'Viewport must be an object', { path: 'viewport' }));
     }
   }
 
   const rawNodes = raw['nodes'];
   if (!Array.isArray(rawNodes)) {
-    errors.push('Property "nodes" must be an array');
+    errors.push(makeError('INVALID_SHAPE', 'Property "nodes" must be an array', { path: 'nodes' }));
   }
 
   const rawEdges = raw['edges'];
   if (!Array.isArray(rawEdges)) {
-    errors.push('Property "edges" must be an array');
+    errors.push(makeError('INVALID_SHAPE', 'Property "edges" must be an array', { path: 'edges' }));
   }
 
   if (errors.length > 0 && (!Array.isArray(rawNodes) || !Array.isArray(rawEdges))) {
@@ -157,7 +168,7 @@ export function parseGraph(input: unknown): ParseResult {
   for (let i = 0; i < validNodesArray.length; i++) {
     const n = validNodesArray[i];
     if (typeof n !== 'object' || n === null) {
-      errors.push(`Node at index ${i} must be an object`);
+      errors.push(makeError('INVALID_SHAPE', `Node at index ${i} must be an object`, { path: `nodes[${i}]` }));
       continue;
     }
 
@@ -169,17 +180,30 @@ export function parseGraph(input: unknown): ParseResult {
     const ports = nodeRec['ports'];
 
     if (typeof id !== 'string' || !id.trim()) {
-      errors.push(`Node at index ${i} must have a non-empty string "id"`);
+      errors.push(
+        makeError('INVALID_SHAPE', `Node at index ${i} must have a non-empty string "id"`, {
+          path: `nodes[${i}].id`,
+        })
+      );
       continue;
     }
 
     if (seenNodeIds.has(id)) {
-      errors.push(`Duplicate node id "${id}" at index ${i}`);
+      errors.push(
+        makeError('DUPLICATE_ID', `Duplicate node id "${id}" at index ${i}`, {
+          path: `nodes[${i}].id`,
+          context: { id },
+        })
+      );
     }
     seenNodeIds.add(id);
 
     if (typeof type !== 'string' || !type.trim()) {
-      errors.push(`Node "${id}" has invalid or missing "type"`);
+      errors.push(
+        makeError('INVALID_SHAPE', `Node "${id}" has invalid or missing "type"`, {
+          path: `nodes[${i}].type`,
+        })
+      );
     }
 
     const nodeLabel = typeof label === 'string' ? label : id;
@@ -194,10 +218,18 @@ export function parseGraph(input: unknown): ParseResult {
         posX = x;
         posY = y;
       } else {
-        errors.push(`Node "${id}" has non-finite coordinates in "position"`);
+        errors.push(
+          makeError('NON_FINITE', `Node "${id}" has non-finite coordinates in "position"`, {
+            path: `nodes[${i}].position`,
+          })
+        );
       }
     } else {
-      errors.push(`Node "${id}" is missing a valid "position" object`);
+      errors.push(
+        makeError('INVALID_SHAPE', `Node "${id}" is missing a valid "position" object`, {
+          path: `nodes[${i}].position`,
+        })
+      );
     }
 
     const parsedPorts: Port[] = [];
@@ -205,7 +237,11 @@ export function parseGraph(input: unknown): ParseResult {
       for (let j = 0; j < ports.length; j++) {
         const p = ports[j];
         if (typeof p !== 'object' || p === null) {
-          errors.push(`Port at index ${j} in node "${id}" must be an object`);
+          errors.push(
+            makeError('INVALID_SHAPE', `Port at index ${j} in node "${id}" must be an object`, {
+              path: `nodes[${i}].ports[${j}]`,
+            })
+          );
           continue;
         }
 
@@ -217,21 +253,42 @@ export function parseGraph(input: unknown): ParseResult {
         const pMax = pRec['maxConnections'];
 
         if (typeof pId !== 'string' || !pId.trim()) {
-          errors.push(`Port at index ${j} in node "${id}" has invalid "id"`);
+          errors.push(
+            makeError('INVALID_SHAPE', `Port at index ${j} in node "${id}" has invalid "id"`, {
+              path: `nodes[${i}].ports[${j}].id`,
+            })
+          );
           continue;
         }
 
         if (seenPortIds.has(pId)) {
-          errors.push(`Duplicate port id "${pId}" in node "${id}"`);
+          errors.push(
+            makeError('DUPLICATE_ID', `Duplicate port id "${pId}" in node "${id}"`, {
+              path: `nodes[${i}].ports[${j}].id`,
+              context: { portId: pId },
+            })
+          );
         }
         seenPortIds.add(pId);
 
         if (pDir !== 'in' && pDir !== 'out') {
-          errors.push(`Port "${pId}" in node "${id}" has invalid direction: must be "in" or "out"`);
+          errors.push(
+            makeError(
+              'BAD_DIRECTION',
+              `Port "${pId}" in node "${id}" has invalid direction: must be "in" or "out"`,
+              { path: `nodes[${i}].ports[${j}].direction` }
+            )
+          );
         }
 
         if (pType !== 'trigger' && pType !== 'action' && pType !== 'data') {
-          errors.push(`Port "${pId}" in node "${id}" has invalid type "${String(pType)}": must be "trigger", "action", or "data"`);
+          errors.push(
+            makeError(
+              'BAD_PORT_TYPE',
+              `Port "${pId}" in node "${id}" has invalid type "${String(pType)}": must be "trigger", "action", or "data"`,
+              { path: `nodes[${i}].ports[${j}].type` }
+            )
+          );
         }
 
         let maxConn = Infinity;
@@ -240,7 +297,13 @@ export function parseGraph(input: unknown): ParseResult {
         } else if (typeof pMax === 'number' && Number.isFinite(pMax) && pMax >= 1) {
           maxConn = pMax;
         } else {
-          errors.push(`Port "${pId}" in node "${id}" has invalid maxConnections: must be a positive integer or null`);
+          errors.push(
+            makeError(
+              'INVALID_SHAPE',
+              `Port "${pId}" in node "${id}" has invalid maxConnections: must be a positive integer or null`,
+              { path: `nodes[${i}].ports[${j}].maxConnections` }
+            )
+          );
         }
 
         parsedPorts.push({
@@ -252,7 +315,11 @@ export function parseGraph(input: unknown): ParseResult {
         });
       }
     } else {
-      errors.push(`Node "${id}" must have a "ports" array`);
+      errors.push(
+        makeError('INVALID_SHAPE', `Node "${id}" must have a "ports" array`, {
+          path: `nodes[${i}].ports`,
+        })
+      );
     }
 
     parsedNodes[id] = {
@@ -276,7 +343,7 @@ export function parseGraph(input: unknown): ParseResult {
   for (let i = 0; i < validEdgesArray.length; i++) {
     const e = validEdgesArray[i];
     if (typeof e !== 'object' || e === null) {
-      errors.push(`Edge at index ${i} must be an object`);
+      errors.push(makeError('INVALID_SHAPE', `Edge at index ${i} must be an object`, { path: `edges[${i}]` }));
       continue;
     }
 
@@ -286,21 +353,30 @@ export function parseGraph(input: unknown): ParseResult {
     const target = edgeRec['target'];
 
     if (typeof edgeId !== 'string' || !edgeId.trim()) {
-      errors.push(`Edge at index ${i} must have a non-empty string "id"`);
+      errors.push(
+        makeError('INVALID_SHAPE', `Edge at index ${i} must have a non-empty string "id"`, {
+          path: `edges[${i}].id`,
+        })
+      );
       continue;
     }
 
     if (seenEdgeIds.has(edgeId)) {
-      errors.push(`Duplicate edge id "${edgeId}" at index ${i}`);
+      errors.push(
+        makeError('DUPLICATE_ID', `Duplicate edge id "${edgeId}" at index ${i}`, {
+          path: `edges[${i}].id`,
+          context: { edgeId },
+        })
+      );
     }
     seenEdgeIds.add(edgeId);
 
     if (typeof source !== 'object' || source === null) {
-      errors.push(`Edge "${edgeId}" must have a "source" object`);
+      errors.push(makeError('INVALID_SHAPE', `Edge "${edgeId}" must have a "source" object`, { path: `edges[${i}].source` }));
       continue;
     }
     if (typeof target !== 'object' || target === null) {
-      errors.push(`Edge "${edgeId}" must have a "target" object`);
+      errors.push(makeError('INVALID_SHAPE', `Edge "${edgeId}" must have a "target" object`, { path: `edges[${i}].target` }));
       continue;
     }
 
@@ -313,43 +389,75 @@ export function parseGraph(input: unknown): ParseResult {
     const tPortId = tRec['portId'];
 
     if (typeof sNodeId !== 'string' || typeof sPortId !== 'string') {
-      errors.push(`Edge "${edgeId}" has invalid source nodeId or portId`);
+      errors.push(
+        makeError('INVALID_SHAPE', `Edge "${edgeId}" has invalid source nodeId or portId`, {
+          path: `edges[${i}].source`,
+        })
+      );
       continue;
     }
     if (typeof tNodeId !== 'string' || typeof tPortId !== 'string') {
-      errors.push(`Edge "${edgeId}" has invalid target nodeId or portId`);
+      errors.push(
+        makeError('INVALID_SHAPE', `Edge "${edgeId}" has invalid target nodeId or portId`, {
+          path: `edges[${i}].target`,
+        })
+      );
       continue;
     }
 
     const sourceNode = scratchGraph.nodes[sNodeId];
     if (!sourceNode) {
-      errors.push(`Edge "${edgeId}" references non-existent source node "${sNodeId}"`);
+      errors.push(
+        makeError('MISSING_REF', `Edge "${edgeId}" references non-existent source node "${sNodeId}"`, {
+          path: `edges[${i}].source.nodeId`,
+        })
+      );
       continue;
     }
 
     const targetNode = scratchGraph.nodes[tNodeId];
     if (!targetNode) {
-      errors.push(`Edge "${edgeId}" references non-existent target node "${tNodeId}"`);
+      errors.push(
+        makeError('MISSING_REF', `Edge "${edgeId}" references non-existent target node "${tNodeId}"`, {
+          path: `edges[${i}].target.nodeId`,
+        })
+      );
       continue;
     }
 
     const sourcePort = sourceNode.ports.find((p) => p.id === sPortId);
     if (!sourcePort) {
-      errors.push(`Edge "${edgeId}" references non-existent source port "${sPortId}" on node "${sNodeId}"`);
+      errors.push(
+        makeError('MISSING_REF', `Edge "${edgeId}" references non-existent source port "${sPortId}" on node "${sNodeId}"`, {
+          path: `edges[${i}].source.portId`,
+        })
+      );
       continue;
     }
 
     const targetPort = targetNode.ports.find((p) => p.id === tPortId);
     if (!targetPort) {
-      errors.push(`Edge "${edgeId}" references non-existent target port "${tPortId}" on node "${tNodeId}"`);
+      errors.push(
+        makeError('MISSING_REF', `Edge "${edgeId}" references non-existent target port "${tPortId}" on node "${tNodeId}"`, {
+          path: `edges[${i}].target.portId`,
+        })
+      );
       continue;
     }
 
     if (sourcePort.direction !== 'out') {
-      errors.push(`Edge "${edgeId}" source port "${sPortId}" must have direction "out"`);
+      errors.push(
+        makeError('BAD_DIRECTION', `Edge "${edgeId}" source port "${sPortId}" must have direction "out"`, {
+          path: `edges[${i}].source.portId`,
+        })
+      );
     }
     if (targetPort.direction !== 'in') {
-      errors.push(`Edge "${edgeId}" target port "${tPortId}" must have direction "in"`);
+      errors.push(
+        makeError('BAD_DIRECTION', `Edge "${edgeId}" target port "${tPortId}" must have direction "in"`, {
+          path: `edges[${i}].target.portId`,
+        })
+      );
     }
 
     const check = canConnect(
@@ -359,7 +467,16 @@ export function parseGraph(input: unknown): ParseResult {
     );
 
     if (!check.ok) {
-      errors.push(`Edge "${edgeId}" fails connection validation: ${check.reason}`);
+      errors.push(
+        makeError(
+          'ILLEGAL_EDGE',
+          `Edge "${edgeId}" fails connection validation: ${check.reason}`,
+          {
+            path: `edges[${i}]`,
+            context: { cause: check.code },
+          }
+        )
+      );
     } else {
       const validEdge: Edge = {
         id: edgeId,

@@ -21,6 +21,8 @@ coverage/
 # Instructions and prompt markdown files (NEVER commit)
 files (3)/
 files*/
+error-state/
+*ERROR*.md
 01-CONTEXT.md
 02-ARCHITECTURE.md
 03-DESIGN.md

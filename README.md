@@ -97,3 +97,10 @@ tests/         unit tests for the core logic
 - Pan and zoom are view settings, so they are not part of undo history.
 - Importing a workflow is a single undoable step.
 - Undo history keeps the last 200 steps.
+
+## Author
+
+| Name | College |
+|---|---|
+| Adarsh Singh | ABESIT |
+
